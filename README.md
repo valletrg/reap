@@ -65,6 +65,7 @@ or
 | `reap listen` | Show all listening ports |
 | `reap file <PATH>` | Find processes with file open |
 | `reap name <NAME>` | Find processes by name |
+| `reap top` | See top ram usage by app |
 
 ## Output Format
 

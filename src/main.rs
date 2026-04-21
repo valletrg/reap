@@ -4,11 +4,13 @@ mod format;
 mod kill;
 mod port;
 mod proc;
+mod top;
 
 use colored::control::set_override;
 use format::{format_port_entries, print_error};
 use kill::kill_by_port;
 use port::{find_all_listening, find_processes_by_file, find_processes_by_name, find_processes_by_port};
+use top::{format_top, gather_top};
 
 #[derive(clap::Parser)]
 #[command(
@@ -65,6 +67,11 @@ enum Commands {
         #[arg(default_value = "15", allow_hyphen_values = true)]
         signal: i32,
     },
+    #[command(about = "Show top apps by RAM usage")]
+    Top {
+        #[arg(long, short, default_value = "10")]
+        n: usize,
+    },
 }
 
 fn main() {
@@ -113,6 +120,15 @@ fn main() {
             let output = format_port_entries(&entries, verbose);
             if output.is_empty() {
                 print_error(&format!("No process found with name {}", name));
+                std::process::exit(1);
+            }
+            println!("{}", output);
+        }
+        Some(Commands::Top { n }) => {
+            let entries = gather_top(n);
+            let output = format_top(&entries);
+            if entries.is_empty() {
+                print_error("No processes found.");
                 std::process::exit(1);
             }
             println!("{}", output);
