@@ -73,15 +73,3 @@ fn truncate_command(cmd: &str, max_len: usize) -> String {
 pub fn print_error(msg: &str) {
     eprintln!("{}", msg.red());
 }
-
-pub fn print_success(msg: &str) {
-    println!("{}", msg.green());
-}
-
-pub fn is_terminal() -> bool {
-    atty::is(atty::Stream::Stdout)
-}
-
-pub fn strip_ansi(s: &str) -> String {
-    s.replace('\x1b', "")
-}

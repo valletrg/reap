@@ -8,12 +8,14 @@ pub struct PortEntry {
     pub pid: i32,
     pub uid: u32,
     pub command: String,
+    #[allow(dead_code)]
     pub local_addr: String,
     pub local_port: u16,
     pub protocol: String,
     pub state: String,
     pub inode: u64,
     pub fd: String,
+    #[allow(dead_code)]
     pub mode: Option<String>,
 }
 
@@ -88,9 +90,7 @@ fn build_inode_map() -> HashMap<u64, (i32, String, u32, String)> {
                         if let Some(inode) = inode_for_fd(pid, &fd_name) {
                             let cmdline = read_cmdline(pid).unwrap_or_else(|| "<restricted>".to_string());
                             let uid = get_uid(pid).unwrap_or(0);
-                            if !inode_to_info.contains_key(&inode) {
-                                inode_to_info.insert(inode, (pid, cmdline, uid, fd_name));
-                            }
+                            inode_to_info.entry(inode).or_insert((pid, cmdline, uid, fd_name));
                         }
                     }
                 }
@@ -107,13 +107,13 @@ pub fn find_processes_by_port(port: u16, protocol: &str) -> Vec<PortEntry> {
         let udp6_content = fs::read_to_string("/proc/net/udp6").unwrap_or_default();
         let udp_entries = parse_proc_net_tcp(&udp_content);
         let udp6_entries = parse_proc_net_tcp(&udp6_content);
-        udp_entries.into_iter().chain(udp6_entries.into_iter()).collect()
+        udp_entries.into_iter().chain(udp6_entries).collect()
     } else {
         let tcp_content = fs::read_to_string("/proc/net/tcp").unwrap_or_default();
         let tcp6_content = fs::read_to_string("/proc/net/tcp6").unwrap_or_default();
         let tcp_entries = parse_proc_net_tcp(&tcp_content);
         let tcp6_entries = parse_proc_net_tcp(&tcp6_content);
-        tcp_entries.into_iter().chain(tcp6_entries.into_iter()).collect()
+        tcp_entries.into_iter().chain(tcp6_entries).collect()
     };
 
     let port_entries: Vec<(String, u16, u64, String)> = entries
@@ -152,7 +152,7 @@ pub fn find_all_listening() -> Vec<PortEntry> {
 
     let all_entries: Vec<(String, u16, u64, String)> = tcp_entries
         .into_iter()
-        .chain(tcp6_entries.into_iter())
+        .chain(tcp6_entries)
         .filter(|(_, _, _, state)| state == "LISTEN")
         .collect();
 
