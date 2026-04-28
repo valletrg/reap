@@ -4,16 +4,12 @@ use std::path::Path;
 
 use comfy_table::{Cell, ContentArrangement, Table};
 
+#[derive(serde::Serialize)]
 pub struct AppMemEntry {
     pub name: String,
     pub rss_kb: u64,
 }
 
-/// Read PSS (Proportional Set Size) from smaps_rollup.
-/// PSS is more accurate than RSS because it accounts for shared memory
-/// proportionally — a shared 1MB region across 10 processes counts as 100KB
-/// per process. This avoids the double-counting problem where RSS sums the
-/// full shared region for every PID that maps it (e.g. Firefox with 26 PIDs).
 fn read_pss_kb(pid: u32) -> Option<u64> {
     let path = format!("/proc/{}/smaps_rollup", pid);
     let data = fs::read_to_string(path).ok()?;

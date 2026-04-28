@@ -1,16 +1,20 @@
 use clap::{Parser, Subcommand};
 
 mod format;
+mod json;
 mod kill;
 mod port;
 mod proc;
 mod top;
+mod watch;
 
 use colored::control::set_override;
 use format::{format_port_entries, print_error};
+use json::{format_json, format_top_json};
 use kill::kill_by_port;
 use port::{find_all_listening, find_processes_by_file, find_processes_by_name, find_processes_by_port};
 use top::{format_top, gather_top};
+use watch::{watch_port, which_port};
 
 #[derive(clap::Parser)]
 #[command(
@@ -42,6 +46,8 @@ enum Commands {
         udp: bool,
         #[arg(long, short)]
         verbose: bool,
+        #[arg(long)]
+        json: bool,
     },
     #[command(about = "Find processes by file")]
     File {
@@ -71,6 +77,22 @@ enum Commands {
     Top {
         #[arg(long, short, default_value = "10")]
         n: usize,
+        #[arg(long)]
+        json: bool,
+    },
+    #[command(about = "Watch a port continuously")]
+    Watch {
+        port: u16,
+        #[arg(long, short)]
+        udp: bool,
+        #[arg(long, default_value = "1")]
+        interval: u64,
+    },
+    #[command(about = "Show which process owns a port")]
+    Which {
+        port: u16,
+        #[arg(long, short)]
+        udp: bool,
     },
 }
 
@@ -84,15 +106,19 @@ fn main() {
     }
 
     match cli.command {
-        Some(Commands::Port { port, udp, verbose }) => {
+        Some(Commands::Port { port, udp, verbose, json }) => {
             let protocol = if udp { "udp" } else { "tcp" };
             let entries = find_processes_by_port(port, protocol);
-            let output = format_port_entries(&entries, verbose);
-            if output.is_empty() {
+            if entries.is_empty() {
                 print_error(&format!("No process found on port {}", port));
                 std::process::exit(1);
             }
-            println!("{}", output);
+            if json {
+                println!("{}", format_json(&entries, port, protocol));
+            } else {
+                let output = format_port_entries(&entries, verbose);
+                println!("{}", output);
+            }
         }
         Some(Commands::Kill { signal, port }) => {
             kill_by_port(port, signal);
@@ -124,14 +150,26 @@ fn main() {
             }
             println!("{}", output);
         }
-        Some(Commands::Top { n }) => {
+        Some(Commands::Top { n, json }) => {
             let entries = gather_top(n);
-            let output = format_top(&entries);
             if entries.is_empty() {
                 print_error("No processes found.");
                 std::process::exit(1);
             }
-            println!("{}", output);
+            if json {
+                println!("{}", format_top_json(&entries));
+            } else {
+                let output = format_top(&entries);
+                println!("{}", output);
+            }
+        }
+        Some(Commands::Watch { port, udp, interval }) => {
+            let protocol = if udp { "udp" } else { "tcp" };
+            watch_port(port, protocol, interval);
+        }
+        Some(Commands::Which { port, udp }) => {
+            let protocol = if udp { "udp" } else { "tcp" };
+            println!("{}", which_port(port, protocol));
         }
         None => {
             print_error("No command specified. Use reap --help for usage.");

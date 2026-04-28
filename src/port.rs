@@ -46,7 +46,7 @@ pub fn parse_proc_net_tcp(content: &str) -> Vec<(String, u16, u64, String)> {
     entries
 }
 
-fn hex_to_ip(hex: &str) -> String {
+pub fn hex_to_ip(hex: &str) -> String {
     let parts: Vec<u32> = hex
         .split(':')
         .filter_map(|s| u32::from_str_radix(s, 16).ok())
@@ -58,7 +58,7 @@ fn hex_to_ip(hex: &str) -> String {
     }
 }
 
-fn tcp_state_string(state: u8) -> String {
+pub fn tcp_state_string(state: u8) -> String {
     match state {
         0x01 => "ESTABLISHED",
         0x02 => "SYN_SENT",
@@ -261,4 +261,85 @@ pub fn find_processes_by_name(name: &str) -> Vec<PortEntry> {
     }
 
     results
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hex_to_ip_localhost() {
+        let result = hex_to_ip("7F000001");
+        assert_eq!(result, "unknown"); // single segment, not 4
+    }
+
+    #[test]
+    fn test_hex_to_ip_multiple_segments() {
+        // "01020304" without colons splits to ["01020304"] only 1 element, returns "unknown"
+        let result = hex_to_ip("01020304");
+        assert_eq!(result, "unknown");
+    }
+
+    #[test]
+    fn test_hex_to_ip_with_colons() {
+        // four parts separated by colons, actual format from /proc/net/tcp
+        let result = hex_to_ip("01:02:03:04");
+        assert_eq!(result, "1.2.3.4");
+    }
+
+    #[test]
+    fn test_hex_to_ip_invalid() {
+        let result = hex_to_ip("invalid");
+        assert_eq!(result, "unknown");
+    }
+
+    #[test]
+    fn test_hex_to_ip_partial() {
+        // Only 2 parts
+        let result = hex_to_ip("0102");
+        assert_eq!(result, "unknown");
+    }
+
+    #[test]
+    fn test_hex_to_ip_three_parts() {
+        // Only 3 parts
+        let result = hex_to_ip("010203");
+        assert_eq!(result, "unknown");
+    }
+
+    #[test]
+    fn test_tcp_state_string_listen() {
+        assert_eq!(tcp_state_string(0x0A), "LISTEN");
+    }
+
+    #[test]
+    fn test_tcp_state_string_established() {
+        assert_eq!(tcp_state_string(0x01), "ESTABLISHED");
+    }
+
+    #[test]
+    fn test_tcp_state_string_unknown() {
+        assert_eq!(tcp_state_string(0xFF), "UNKNOWN");
+    }
+
+    #[test]
+    fn test_parse_proc_net_tcp_valid_line() {
+        let content = "  sl  local_address rem_address  st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n  0: 00000000:0050 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000 0 62915 1 c200000000000000 100 0 0 10 -1";
+        let entries = parse_proc_net_tcp(content);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].1, 80); // port 0x0050 = 80
+        assert_eq!(entries[0].3, "LISTEN"); // state 0x0A = LISTEN
+    }
+
+    #[test]
+    fn test_parse_proc_net_tcp_empty_content() {
+        let entries = parse_proc_net_tcp("");
+        assert_eq!(entries.len(), 0);
+    }
+
+    #[test]
+    fn test_parse_proc_net_tcp_header_only() {
+        let entries = parse_proc_net_tcp("sl  local_address rem_address  st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode");
+        assert_eq!(entries.len(), 0);
+    }
 }
