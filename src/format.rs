@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use colored::Colorize;
 use comfy_table::{Cell, Color, ContentArrangement, Table};
 
@@ -35,7 +37,7 @@ pub fn format_port_entries(entries: &[PortEntry], verbose: bool) -> String {
 
         let command = truncate_command(&entry.command, max_command_len);
 
-        let color = match entry.state.as_str() {
+        let color = match entry.state {
             "LISTEN" => Color::Green,
             "ESTABLISHED" => Color::Yellow,
             _ => Color::Red,
@@ -62,11 +64,11 @@ pub fn format_port_entries(entries: &[PortEntry], verbose: bool) -> String {
     table.to_string()
 }
 
-fn truncate_command(cmd: &str, max_len: usize) -> String {
+fn truncate_command(cmd: &str, max_len: usize) -> Cow<'_, str> {
     if cmd.len() <= max_len {
-        cmd.to_string()
+        Cow::Borrowed(cmd)
     } else {
-        format!("{}...", &cmd[..max_len.saturating_sub(3)])
+        Cow::Owned(format!("{}...", &cmd[..max_len.saturating_sub(3)]))
     }
 }
 

@@ -12,10 +12,7 @@ pub fn kill_by_port(port: u16, signal_num: i32) {
         return;
     }
 
-    let signal = match signal_num {
-        9 => Signal::SIGKILL,
-        _ => Signal::SIGTERM,
-    };
+    let signal = Signal::try_from(signal_num).unwrap_or(Signal::SIGTERM);
 
     let action = if signal == Signal::SIGKILL {
         "Killed"

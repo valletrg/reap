@@ -12,14 +12,14 @@ pub struct PortEntry {
     pub local_addr: String,
     pub local_port: u16,
     pub protocol: String,
-    pub state: String,
+    pub state: &'static str,
     pub inode: u64,
     pub fd: String,
     #[allow(dead_code)]
     pub mode: Option<String>,
 }
 
-pub fn parse_proc_net_tcp(content: &str) -> Vec<(String, u16, u64, String)> {
+pub fn parse_proc_net_tcp(content: &str) -> Vec<(String, u16, u64, &'static str)> {
     let mut entries = Vec::new();
     for line in content.lines().skip(1) {
         let parts: Vec<&str> = line.split_whitespace().collect();
@@ -27,11 +27,10 @@ pub fn parse_proc_net_tcp(content: &str) -> Vec<(String, u16, u64, String)> {
             continue;
         }
         let local_addr_hex = parts[1];
-        let local_port_hex = parts[1];
         let inode_str = parts[9];
         let state_hex = parts[3];
 
-        let local_port = u16::from_str_radix(&local_port_hex[local_port_hex.len() - 4..], 16).ok();
+        let local_port = u16::from_str_radix(&local_addr_hex[local_addr_hex.len() - 4..], 16).ok();
 
         let inode: Option<u64> = inode_str.parse().ok();
 
@@ -47,18 +46,18 @@ pub fn parse_proc_net_tcp(content: &str) -> Vec<(String, u16, u64, String)> {
 }
 
 pub fn hex_to_ip(hex: &str) -> String {
-    let parts: Vec<u32> = hex
-        .split(':')
-        .filter_map(|s| u32::from_str_radix(s, 16).ok())
-        .collect();
-    if parts.len() == 4 {
-        format!("{}.{}.{}.{}", parts[0], parts[1], parts[2], parts[3])
-    } else {
-        String::from("unknown")
+    let hex_clean = hex.trim();
+    let ip = match hex_clean.len() {
+        8 => u32::from_str_radix(hex_clean, 16).ok(),
+        _ => None,
+    };
+    match ip {
+        Some(ip) => format!("{}.{}.{}.{}", ip >> 24, (ip >> 16) & 0xFF, (ip >> 8) & 0xFF, ip & 0xFF),
+        None => String::from("unknown"),
     }
 }
 
-pub fn tcp_state_string(state: u8) -> String {
+pub fn tcp_state_string(state: u8) -> &'static str {
     match state {
         0x01 => "ESTABLISHED",
         0x02 => "SYN_SENT",
@@ -73,7 +72,6 @@ pub fn tcp_state_string(state: u8) -> String {
         0x0B => "CLOSING",
         _ => "UNKNOWN",
     }
-    .to_string()
 }
 
 fn build_inode_map() -> HashMap<u64, (i32, String, u32, String)> {
@@ -102,7 +100,7 @@ fn build_inode_map() -> HashMap<u64, (i32, String, u32, String)> {
 }
 
 pub fn find_processes_by_port(port: u16, protocol: &str) -> Vec<PortEntry> {
-    let entries: Vec<(String, u16, u64, String)> = if protocol == "udp" {
+    let entries: Vec<(String, u16, u64, &'static str)> = if protocol == "udp" {
         let udp_content = fs::read_to_string("/proc/net/udp").unwrap_or_default();
         let udp6_content = fs::read_to_string("/proc/net/udp6").unwrap_or_default();
         let udp_entries = parse_proc_net_tcp(&udp_content);
@@ -116,7 +114,7 @@ pub fn find_processes_by_port(port: u16, protocol: &str) -> Vec<PortEntry> {
         tcp_entries.into_iter().chain(tcp6_entries).collect()
     };
 
-    let port_entries: Vec<(String, u16, u64, String)> = entries
+    let port_entries: Vec<(String, u16, u64, &'static str)> = entries
         .into_iter()
         .filter(|(_, p, _, _)| *p == port)
         .collect();
@@ -130,10 +128,10 @@ pub fn find_processes_by_port(port: u16, protocol: &str) -> Vec<PortEntry> {
                 pid: *pid,
                 uid: *uid,
                 command: command.clone(),
-                local_addr: local_addr.clone(),
+                local_addr,
                 local_port,
                 protocol: protocol.to_string(),
-                state: state.clone(),
+                state,
                 inode,
                 fd: fd.clone(),
                 mode: None,
@@ -150,10 +148,10 @@ pub fn find_all_listening() -> Vec<PortEntry> {
     let tcp_entries = parse_proc_net_tcp(&tcp_content);
     let tcp6_entries = parse_proc_net_tcp(&tcp6_content);
 
-    let all_entries: Vec<(String, u16, u64, String)> = tcp_entries
+    let all_entries: Vec<(String, u16, u64, &'static str)> = tcp_entries
         .into_iter()
         .chain(tcp6_entries)
-        .filter(|(_, _, _, state)| state == "LISTEN")
+        .filter(|(_, _, _, state)| *state == "LISTEN")
         .collect();
 
     let inode_to_info = build_inode_map();
@@ -165,10 +163,10 @@ pub fn find_all_listening() -> Vec<PortEntry> {
                 pid: *pid,
                 uid: *uid,
                 command: command.clone(),
-                local_addr: local_addr.clone(),
+                local_addr,
                 local_port,
                 protocol: "tcp".to_string(),
-                state: state.clone(),
+                state,
                 inode,
                 fd: fd.clone(),
                 mode: None,
@@ -213,7 +211,7 @@ pub fn find_processes_by_file(path: &str) -> Vec<PortEntry> {
                                     local_addr: "N/A".to_string(),
                                     local_port: 0,
                                     protocol: "file".to_string(),
-                                    state: "OPEN".to_string(),
+                                    state: "OPEN",
                                     inode: 0,
                                     fd: fd_name,
                                     mode,
@@ -249,7 +247,7 @@ pub fn find_processes_by_name(name: &str) -> Vec<PortEntry> {
                             local_addr: "N/A".to_string(),
                             local_port: 0,
                             protocol: "any".to_string(),
-                            state: "N/A".to_string(),
+                            state: "N/A",
                             inode: 0,
                             fd: "N/A".to_string(),
                             mode: None,
@@ -270,20 +268,18 @@ mod tests {
     #[test]
     fn test_hex_to_ip_localhost() {
         let result = hex_to_ip("7F000001");
-        assert_eq!(result, "unknown"); // single segment, not 4
+        assert_eq!(result, "127.0.0.1");
     }
 
     #[test]
     fn test_hex_to_ip_multiple_segments() {
-        // "01020304" without colons splits to ["01020304"] only 1 element, returns "unknown"
         let result = hex_to_ip("01020304");
-        assert_eq!(result, "unknown");
+        assert_eq!(result, "1.2.3.4");
     }
 
     #[test]
     fn test_hex_to_ip_with_colons() {
-        // four parts separated by colons, actual format from /proc/net/tcp
-        let result = hex_to_ip("01:02:03:04");
+        let result = hex_to_ip("01020304");
         assert_eq!(result, "1.2.3.4");
     }
 

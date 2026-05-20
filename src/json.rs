@@ -29,7 +29,7 @@ impl PortResult {
                 pid: e.pid,
                 user,
                 command: e.command.clone(),
-                state: e.state.clone(),
+                state: e.state.to_string(),
             }
         }).collect();
         

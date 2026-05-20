@@ -9,11 +9,11 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-comfy-table = "7"
+comfy-table = "7.1"
 colored = "2"
 crossterm = "0.29"
 atty = "0.2"
-nix = { version = "0.27", features = ["signal", "process"] }
+nix = { version = "0.28", features = ["signal", "process"] }
 procfs = "0.16"
 uzers = "0.12"
 serde = { version = "1", features = ["derive"] }
