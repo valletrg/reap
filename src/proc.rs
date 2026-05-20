@@ -8,18 +8,23 @@ pub fn resolve_fd_symlink(pid: i32, fd: &str) -> Option<String> {
 }
 
 pub fn read_cmdline(pid: i32) -> Option<String> {
-    let path_str = format!("/proc/{}/cmdline", pid);
-    let path = Path::new(&path_str);
+    let path = format!("/proc/{}/cmdline", pid);
     let data = fs::read(path).ok()?;
     if data.is_empty() {
         return None;
     }
-    let cmdline = data
-        .split(|&b| b == 0)
-        .filter(|s| !s.is_empty())
-        .map(|s| String::from_utf8_lossy(s).to_string())
-        .collect::<Vec<_>>()
-        .join(" ");
+    let mut cmdline = String::with_capacity(data.len());
+    let mut first = true;
+    for chunk in data.split(|&b| b == 0) {
+        if chunk.is_empty() {
+            continue;
+        }
+        if !first {
+            cmdline.push(' ');
+        }
+        first = false;
+        cmdline.push_str(&String::from_utf8_lossy(chunk));
+    }
     if cmdline.is_empty() {
         None
     } else {

@@ -1,7 +1,11 @@
 use std::collections::HashMap;
 use std::fs;
+use std::sync::LazyLock;
 
 use crate::proc::{get_uid, inode_for_fd, read_cmdline, resolve_fd_symlink};
+
+static INODE_MAP: LazyLock<HashMap<u64, (i32, String, u32, String)>> =
+    LazyLock::new(build_inode_map);
 
 #[derive(Debug, Clone)]
 pub struct PortEntry {
@@ -119,11 +123,9 @@ pub fn find_processes_by_port(port: u16, protocol: &str) -> Vec<PortEntry> {
         .filter(|(_, p, _, _)| *p == port)
         .collect();
 
-    let inode_to_info = build_inode_map();
-
     let mut results = Vec::new();
     for (local_addr, local_port, inode, state) in port_entries {
-        if let Some((pid, command, uid, fd)) = inode_to_info.get(&inode) {
+        if let Some((pid, command, uid, fd)) = INODE_MAP.get(&inode) {
             results.push(PortEntry {
                 pid: *pid,
                 uid: *uid,
@@ -154,11 +156,9 @@ pub fn find_all_listening() -> Vec<PortEntry> {
         .filter(|(_, _, _, state)| *state == "LISTEN")
         .collect();
 
-    let inode_to_info = build_inode_map();
-
     let mut results = Vec::new();
     for (local_addr, local_port, inode, state) in all_entries {
-        if let Some((pid, command, uid, fd)) = inode_to_info.get(&inode) {
+        if let Some((pid, command, uid, fd)) = INODE_MAP.get(&inode) {
             results.push(PortEntry {
                 pid: *pid,
                 uid: *uid,
@@ -228,7 +228,7 @@ pub fn find_processes_by_file(path: &str) -> Vec<PortEntry> {
 }
 
 pub fn find_processes_by_name(name: &str) -> Vec<PortEntry> {
-    let name_lower = name.to_lowercase();
+    let name_lower = name.to_ascii_lowercase();
     let mut results = Vec::new();
 
     if let Ok(dir) = fs::read_dir("/proc") {
@@ -237,8 +237,7 @@ pub fn find_processes_by_name(name: &str) -> Vec<PortEntry> {
             let pid_str = name.to_string_lossy();
             if let Ok(pid) = pid_str.parse::<i32>() {
                 if let Some(cmdline) = read_cmdline(pid) {
-                    let cmdline_lower = cmdline.to_lowercase();
-                    if cmdline_lower.contains(&name_lower) {
+                    if cmdline.to_ascii_lowercase().contains(&name_lower) {
                         let uid = get_uid(pid).unwrap_or(0);
                         results.push(PortEntry {
                             pid,
