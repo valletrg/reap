@@ -1,10 +1,10 @@
-use std::collections::HashMap;
 use std::fs;
 use std::sync::LazyLock;
+use rustc_hash::FxHashMap;
 
 use crate::proc::{get_uid, inode_for_fd, read_cmdline, resolve_fd_symlink};
 
-static INODE_MAP: LazyLock<HashMap<u64, (i32, String, u32, String)>> =
+static INODE_MAP: LazyLock<FxHashMap<u64, (i32, String, u32, String)>> =
     LazyLock::new(build_inode_map);
 
 #[derive(Debug, Clone)]
@@ -24,7 +24,8 @@ pub struct PortEntry {
 }
 
 pub fn parse_proc_net_tcp(content: &str) -> Vec<(String, u16, u64, &'static str)> {
-    let mut entries = Vec::new();
+    let line_count = content.lines().count().saturating_sub(1);
+    let mut entries = Vec::with_capacity(line_count);
     for line in content.lines().skip(1) {
         let parts: Vec<&str> = line.split_whitespace().collect();
         if parts.len() < 10 {
@@ -78,8 +79,8 @@ pub fn tcp_state_string(state: u8) -> &'static str {
     }
 }
 
-fn build_inode_map() -> HashMap<u64, (i32, String, u32, String)> {
-    let mut inode_to_info: HashMap<u64, (i32, String, u32, String)> = HashMap::new();
+fn build_inode_map() -> FxHashMap<u64, (i32, String, u32, String)> {
+    let mut inode_to_info: FxHashMap<u64, (i32, String, u32, String)> = FxHashMap::default();
 
     if let Ok(dir) = fs::read_dir("/proc") {
         for entry in dir.flatten() {

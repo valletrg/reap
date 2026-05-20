@@ -33,15 +33,11 @@ pub fn read_cmdline(pid: i32) -> Option<String> {
 }
 
 pub fn get_uid(pid: i32) -> Option<u32> {
-    let path_str = format!("/proc/{}/status", pid);
-    let path = Path::new(&path_str);
+    let path = format!("/proc/{}/status", pid);
     let data = fs::read_to_string(path).ok()?;
     for line in data.lines() {
         if line.starts_with("Uid:") {
-            let parts = line.split_whitespace().collect::<Vec<_>>();
-            if parts.len() >= 2 {
-                return parts[1].parse().ok();
-            }
+            return line.split_whitespace().nth(1).and_then(|s| s.parse().ok());
         }
     }
     None
@@ -54,9 +50,8 @@ pub fn inode_for_fd(pid: i32, fd: &str) -> Option<u64> {
         return Some(inode);
     }
 
-    let path_str = format!("/proc/{}/fd/{}", pid, fd);
-    let path = Path::new(&path_str);
     use std::os::unix::fs::MetadataExt;
+    let path = Path::new(&link_target);
     fs::metadata(path).ok().map(|m| m.ino())
 }
 

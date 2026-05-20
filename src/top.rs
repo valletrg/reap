@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use rustc_hash::FxHashMap;
 
 use comfy_table::{Cell, ContentArrangement, Table};
 
@@ -15,10 +15,8 @@ fn read_pss_kb(pid: u32) -> Option<u64> {
     let data = fs::read_to_string(path).ok()?;
     for line in data.lines() {
         if line.starts_with("Pss:") {
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() >= 2 {
-                return parts[1].parse().ok();
-            }
+            let mut parts = line.split_whitespace();
+            return parts.nth(1).and_then(|s| s.parse().ok());
         }
     }
     None
@@ -53,7 +51,7 @@ fn app_name(pid: u32) -> Option<String> {
 }
 
 pub fn gather_top(n: usize) -> Vec<AppMemEntry> {
-    let mut totals: HashMap<String, u64> = HashMap::new();
+    let mut totals: FxHashMap<String, u64> = FxHashMap::default();
 
     let proc_dir = match fs::read_dir("/proc") {
         Ok(d) => d,
@@ -86,10 +84,10 @@ pub fn gather_top(n: usize) -> Vec<AppMemEntry> {
         *totals.entry(app).or_insert(0) += rss;
     }
 
-    let mut entries: Vec<AppMemEntry> = totals
-        .into_iter()
-        .map(|(name, rss_kb)| AppMemEntry { name, rss_kb })
-        .collect();
+    let mut entries: Vec<AppMemEntry> = Vec::with_capacity(totals.len());
+    for (name, rss_kb) in totals {
+        entries.push(AppMemEntry { name, rss_kb });
+    }
 
     entries.sort_by(|a, b| b.rss_kb.cmp(&a.rss_kb));
     entries.truncate(n);
